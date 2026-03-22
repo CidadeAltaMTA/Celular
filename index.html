@@ -6,9 +6,9 @@
     window._mediaRecorder = null;
     window._audioChunks = [];
 
-    window.startRecording = async function(uploadUrl) {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    // Ouve eventos vindos do Lua via triggerBrowserEvent
+    addEventListener('startRecording', function(uploadUrl) {
+        navigator.mediaDevices.getUserMedia({ audio: true }).then(function(stream) {
             window._mediaRecorder = new MediaRecorder(stream);
             window._audioChunks = [];
 
@@ -29,23 +29,23 @@
                         mta.triggerEvent('onAudioUploadError', 'Upload falhou: ' + res.statusText);
                     }
                 } catch(err) {
-                    mta.triggerEvent('onAudioUploadError', 'Erro de conexão: ' + err.message);
+                    mta.triggerEvent('onAudioUploadError', 'Erro: ' + err.message);
                 }
             };
 
             window._mediaRecorder.start();
             mta.triggerEvent('onAudioStatusUpdate', 'Gravando...');
-        } catch(e) {
+        }).catch(function(e) {
             mta.triggerEvent('onAudioUploadError', 'Permissão negada: ' + e.message);
-        }
-    };
+        });
+    });
 
-    window.stopRecording = function() {
+    addEventListener('stopRecording', function() {
         if (window._mediaRecorder && window._mediaRecorder.state === 'recording') {
             window._mediaRecorder.stop();
             mta.triggerEvent('onAudioStatusUpdate', 'Enviando...');
         }
-    };
+    });
 
     function signalReady() {
         if (window.mta && window.mta.triggerEvent) {
