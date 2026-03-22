@@ -10,6 +10,7 @@
         if (e.data === "start") startRec();
         else if (e.data === "stop") stopRec();
         else if (e.data && e.data.type === "play") playAudio(e.data.base64);
+        else if (e.data && e.data.type === "play_url") playAudioUrl(e.data.url);
     });
 
     function send(status, payload) {
@@ -46,6 +47,10 @@
 
     function playAudio(base64) {
         new Audio("data:audio/webm;base64," + base64).play();
+    }
+    
+    function playAudioUrl(url) {
+        new Audio(url).play();
     }
 </script>
 </body>
