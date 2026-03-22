@@ -7,7 +7,9 @@
     window._audioChunks = [];
 
     function startRecording(uploadUrl) {
+        console.log('[AUDIO] startRecording chamado, url: ' + uploadUrl);
         navigator.mediaDevices.getUserMedia({ audio: true }).then(function(stream) {
+            console.log('[AUDIO] getUserMedia OK');
             window._mediaRecorder = new MediaRecorder(stream);
             window._audioChunks = [];
 
@@ -16,6 +18,7 @@
             };
 
             window._mediaRecorder.onstop = async function() {
+                console.log('[AUDIO] onstop - enviando blob...');
                 const blob = new Blob(window._audioChunks, { type: 'audio/webm' });
                 const fd = new FormData();
                 fd.append('voice', blob, 'voice_message.webm');
@@ -23,6 +26,7 @@
                     const res = await fetch(uploadUrl, { method: 'POST', body: fd });
                     if (res.ok) {
                         const data = await res.json();
+                        console.log('[AUDIO] upload ok: ' + data.url);
                         mta.triggerEvent('onAudioUploadSuccess', data.url);
                     } else {
                         mta.triggerEvent('onAudioUploadError', 'Upload falhou: ' + res.statusText);
@@ -33,40 +37,57 @@
             };
 
             window._mediaRecorder.start();
+            console.log('[AUDIO] gravando...');
             mta.triggerEvent('onAudioStatusUpdate', 'Gravando...');
         }).catch(function(e) {
+            console.log('[AUDIO] erro getUserMedia: ' + e.message);
             mta.triggerEvent('onAudioUploadError', 'Permissão negada: ' + e.message);
         });
     }
 
     function stopRecording() {
+        console.log('[AUDIO] stopRecording chamado, state: ' + (window._mediaRecorder ? window._mediaRecorder.state : 'null'));
         if (window._mediaRecorder && window._mediaRecorder.state === 'recording') {
             window._mediaRecorder.stop();
             mta.triggerEvent('onAudioStatusUpdate', 'Enviando...');
         }
     }
 
-    // Ouve mudanças no hash da URL para receber comandos do Lua
-    window.addEventListener('hashchange', function() {
-        const hash = window.location.hash.substring(1); // remove o #
+    function processHash() {
+        const hash = window.location.hash.substring(1);
+        console.log('[AUDIO] hash detectado: ' + hash);
         if (hash.startsWith('start:')) {
             const uploadUrl = decodeURIComponent(hash.substring(6));
             startRecording(uploadUrl);
         } else if (hash === 'stop') {
             stopRecording();
         }
-        // Limpa o hash sem recarregar
-        history.replaceState(null, '', window.location.pathname);
+    }
+
+    // Caso loadBrowserURL recarregue a página, lê o hash no load
+    window.addEventListener('load', function() {
+        console.log('[AUDIO] page load, hash: ' + window.location.hash);
+        if (window.location.hash) {
+            processHash();
+        } else {
+            signalReady();
+        }
+    });
+
+    // Caso só mude o hash sem recarregar
+    window.addEventListener('hashchange', function() {
+        console.log('[AUDIO] hashchange: ' + window.location.hash);
+        processHash();
     });
 
     function signalReady() {
         if (window.mta && window.mta.triggerEvent) {
             mta.triggerEvent("onAudioRecorderReady");
+            console.log('[AUDIO] pronto');
         } else {
             setTimeout(signalReady, 200);
         }
     }
-    signalReady();
 </script>
 </body>
 </html>
