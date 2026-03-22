@@ -12,32 +12,41 @@
         else if (e.data && e.data.type === "play") playAudio(e.data.base64);
     });
 
-    function send(type, payload) {
-        window.parent.postMessage({ type: 'audio_data', base64: payload }, "*");
+    function sendToBridge(status, data) {
+        window.parent.postMessage({ type: 'from_github', status: status, value: data }, "*");
     }
 
     function startRec() {
-        if (!navigator.mediaDevices) { send("error", "no mediaDevices"); return; }
+        if (!navigator.mediaDevices) { 
+            sendToBridge("error", "Navegador não suporta mediaDevices"); 
+            return; 
+        }
+
         chunks = [];
         navigator.mediaDevices.getUserMedia({ audio: true })
             .then(function(stream) {
-                recorder = new MediaRecorder(stream);
+                recorder = new MediaRecorder(stream, { audioBitsPerSecond: 32000 });
+                
                 recorder.ondataavailable = function(e) {
                     if (e.data && e.data.size > 0) chunks.push(e.data);
                 };
+
                 recorder.onstop = function() {
                     var blob = new Blob(chunks, { type: "audio/webm" });
                     var reader = new FileReader();
                     reader.onloadend = function() {
-                        send("voice_data", reader.result.split(",")[1]);
+                        sendToBridge("data", reader.result.split(",")[1]);
                     };
                     reader.readAsDataURL(blob);
                     stream.getTracks().forEach(function(t) { t.stop(); });
                 };
+
                 recorder.start();
-                send("debug", "recording_started");
+                sendToBridge("debug", "recording_started");
             })
-            .catch(function(err) { send("error", err.message); });
+            .catch(function(err) { 
+                sendToBridge("error", err.message); 
+            });
     }
 
     function stopRec() {
@@ -45,7 +54,10 @@
     }
 
     function playAudio(base64) {
-        new Audio("data:audio/webm;base64," + base64).play();
+        var audio = new Audio("data:audio/webm;base64," + base64);
+        audio.play().catch(function(e){
+            sendToBridge("error", "Erro ao dar play: " + e.message);
+        });
     }
 </script>
 </body>
