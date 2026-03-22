@@ -7,18 +7,16 @@
     window._audioChunks = [];
 
     function startRecording(uploadUrl) {
-        console.log('[AUDIO] startRecording chamado, url: ' + uploadUrl);
+        console.log('[AUDIO] startRecording: ' + uploadUrl);
         navigator.mediaDevices.getUserMedia({ audio: true }).then(function(stream) {
             console.log('[AUDIO] getUserMedia OK');
             window._mediaRecorder = new MediaRecorder(stream);
             window._audioChunks = [];
-
             window._mediaRecorder.ondataavailable = function(e) {
                 if (e.data.size > 0) window._audioChunks.push(e.data);
             };
-
             window._mediaRecorder.onstop = async function() {
-                console.log('[AUDIO] onstop - enviando blob...');
+                console.log('[AUDIO] onstop - enviando...');
                 const blob = new Blob(window._audioChunks, { type: 'audio/webm' });
                 const fd = new FormData();
                 fd.append('voice', blob, 'voice_message.webm');
@@ -35,18 +33,17 @@
                     mta.triggerEvent('onAudioUploadError', 'Erro: ' + err.message);
                 }
             };
-
             window._mediaRecorder.start();
             console.log('[AUDIO] gravando...');
             mta.triggerEvent('onAudioStatusUpdate', 'Gravando...');
         }).catch(function(e) {
-            console.log('[AUDIO] erro getUserMedia: ' + e.message);
-            mta.triggerEvent('onAudioUploadError', 'Permissão negada: ' + e.message);
+            console.log('[AUDIO] erro: ' + e.message);
+            mta.triggerEvent('onAudioUploadError', 'Erro: ' + e.message);
         });
     }
 
     function stopRecording() {
-        console.log('[AUDIO] stopRecording chamado, state: ' + (window._mediaRecorder ? window._mediaRecorder.state : 'null'));
+        console.log('[AUDIO] stopRecording, state: ' + (window._mediaRecorder ? window._mediaRecorder.state : 'null'));
         if (window._mediaRecorder && window._mediaRecorder.state === 'recording') {
             window._mediaRecorder.stop();
             mta.triggerEvent('onAudioStatusUpdate', 'Enviando...');
@@ -54,40 +51,37 @@
     }
 
     function processHash() {
-        const hash = window.location.hash.substring(1);
-        console.log('[AUDIO] hash detectado: ' + hash);
+        var hash = window.location.hash.substring(1);
+        console.log('[AUDIO] processHash: ' + hash);
         if (hash.startsWith('start:')) {
-            const uploadUrl = decodeURIComponent(hash.substring(6));
-            startRecording(uploadUrl);
+            startRecording(decodeURIComponent(hash.substring(6)));
         } else if (hash === 'stop') {
             stopRecording();
+        } else {
+            // Sem hash = primeira carga, sinaliza pronto
+            mta.triggerEvent('onAudioRecorderReady');
+            console.log('[AUDIO] pronto');
         }
     }
 
-    // Caso loadBrowserURL recarregue a página, lê o hash no load
-    window.addEventListener('load', function() {
-        console.log('[AUDIO] page load, hash: ' + window.location.hash);
-        if (window.location.hash) {
+    // Espera mta estar disponível ANTES de qualquer ação
+    function waitMtaThenProcess() {
+        if (window.mta && window.mta.triggerEvent) {
             processHash();
         } else {
-            signalReady();
+            setTimeout(waitMtaThenProcess, 100);
         }
+    }
+
+    window.addEventListener('load', function() {
+        console.log('[AUDIO] page loaded, hash: "' + window.location.hash + '"');
+        waitMtaThenProcess();
     });
 
-    // Caso só mude o hash sem recarregar
     window.addEventListener('hashchange', function() {
         console.log('[AUDIO] hashchange: ' + window.location.hash);
         processHash();
     });
-
-    function signalReady() {
-        if (window.mta && window.mta.triggerEvent) {
-            mta.triggerEvent("onAudioRecorderReady");
-            console.log('[AUDIO] pronto');
-        } else {
-            setTimeout(signalReady, 200);
-        }
-    }
 </script>
 </body>
 </html>
