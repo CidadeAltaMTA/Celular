@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+</head>
+
+<body>
+    <p id="s">CEF Audio Cellphone.Client Cidade Alta</p>
+    <script>
+        window.chunks = []; window.recorder = null;
+      
+        var legacyGetUserMedia = (
+            navigator.getUserMedia ||
+            navigator.webkitGetUserMedia ||
+            navigator.mozGetUserMedia ||
+            navigator.msGetUserMedia
+        );
+
+        if (legacyGetUserMedia) {
+            legacyGetUserMedia = legacyGetUserMedia.bind(navigator);
+        }
+
+        window.startRecording = function () {
+            if (!legacyGetUserMedia) {
+                if (window.mta) mta.triggerEvent("onClientReceiveAudioData", "error: getUserMedia not available in this browser");
+                return;
+            }
+
+            window.chunks = [];
+
+            legacyGetUserMedia(
+                { audio: true },
+                function (stream) {
+                    try {
+                        window.recorder = new MediaRecorder(stream);
+                    } catch (e) {
+                        if (window.mta) mta.triggerEvent("onClientReceiveAudioData", "error: MediaRecorder failed: " + e.message);
+                        return;
+                    }
+
+                    window.recorder.ondataavailable = function (e) {
+                        if (e.data && e.data.size > 0) window.chunks.push(e.data);
+                    };
+
+                    window.recorder.onstop = function () {
+                        var blob = new Blob(window.chunks, { type: "audio/webm" });
+                        var reader = new FileReader();
+                        reader.onloadend = function () {
+                            var base64 = reader.result.split(',')[1];
+                            if (window.mta) mta.triggerEvent("onClientReceiveAudioData", base64);
+                        };
+                        reader.readAsDataURL(blob);
+                        stream.getTracks().forEach(function (t) { t.stop(); });
+                    };
+
+                    window.recorder.start();
+                    if (window.mta) mta.triggerEvent("onClientReceiveAudioData", "debug: recording_started");
+                },
+                function (err) {
+                    var msg = err && err.message ? err.message : String(err);
+                    if (window.mta) mta.triggerEvent("onClientReceiveAudioData", "error: mic_denied: " + msg);
+                }
+            );
+        };
+
+        window.stopRecording = function () {
+            if (window.recorder && window.recorder.state !== "inactive") {
+                window.recorder.stop();
+            }
+        };
+
+        window.playAudio = function (base64Data) {
+            try {
+                var audio = new Audio("data:audio/webm;base64," + base64Data);
+                audio.play();
+            } catch (e) { }
+        };
+
+        if (window.mta) mta.triggerEvent("onClientReceiveAudioData", "debug: page_ready");
+    </script>
+</body>
+
+</html>
