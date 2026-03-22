@@ -9,11 +9,11 @@
     window.addEventListener("message", function(e) {
         if (e.data === "start") startRec();
         else if (e.data === "stop") stopRec();
-        else if (e.data && e.data.cmd === "play") playAudio(e.data.base64);
+        else if (e.data && e.data.type === "play") playAudio(e.data.base64);
     });
 
     function send(type, payload) {
-        window.parent.postMessage({ type: type, payload: payload }, "*");
+        window.parent.postMessage({ type: 'audio_data', base64: payload }, "*");
     }
 
     function startRec() {
