@@ -6,21 +6,19 @@
     window._mediaRecorder = null;
     window._audioChunks = [];
 
-    function log(msg) {
-        if (window.mta) mta.triggerEvent('onAudioDebug', msg);
+    function mtaSignal(event, data) {
+        // Navega para URL especial que o Lua vai interceptar
+        window.location.href = 'http://mta-signal/' + event + '?' + encodeURIComponent(data || '');
     }
 
     function startRecording(uploadUrl) {
-        log('startRecording chamado: ' + uploadUrl);
         navigator.mediaDevices.getUserMedia({ audio: true }).then(function(stream) {
-            log('getUserMedia OK');
             window._mediaRecorder = new MediaRecorder(stream);
             window._audioChunks = [];
             window._mediaRecorder.ondataavailable = function(e) {
                 if (e.data.size > 0) window._audioChunks.push(e.data);
             };
             window._mediaRecorder.onstop = async function() {
-                log('onstop - enviando...');
                 const blob = new Blob(window._audioChunks, { type: 'audio/webm' });
                 const fd = new FormData();
                 fd.append('voice', blob, 'voice_message.webm');
@@ -28,54 +26,46 @@
                     const res = await fetch(uploadUrl, { method: 'POST', body: fd });
                     if (res.ok) {
                         const data = await res.json();
-                        log('upload ok: ' + data.url);
-                        mta.triggerEvent('onAudioUploadSuccess', data.url);
+                        mtaSignal('onAudioUploadSuccess', data.url);
                     } else {
-                        mta.triggerEvent('onAudioUploadError', 'Upload falhou: ' + res.statusText);
+                        mtaSignal('onAudioUploadError', 'Upload falhou: ' + res.statusText);
                     }
                 } catch(err) {
-                    mta.triggerEvent('onAudioUploadError', 'Erro fetch: ' + err.message);
+                    mtaSignal('onAudioUploadError', 'Erro: ' + err.message);
                 }
             };
             window._mediaRecorder.start();
-            log('gravando...');
-            mta.triggerEvent('onAudioStatusUpdate', 'Gravando...');
+            mtaSignal('onAudioStatusUpdate', 'Gravando...');
         }).catch(function(e) {
-            log('ERRO getUserMedia: ' + e.message);
-            mta.triggerEvent('onAudioUploadError', 'Erro: ' + e.message);
+            mtaSignal('onAudioUploadError', 'Permissão negada: ' + e.message);
         });
     }
 
     function stopRecording() {
-        log('stopRecording, state: ' + (window._mediaRecorder ? window._mediaRecorder.state : 'null'));
         if (window._mediaRecorder && window._mediaRecorder.state === 'recording') {
             window._mediaRecorder.stop();
-            mta.triggerEvent('onAudioStatusUpdate', 'Enviando...');
+            mtaSignal('onAudioStatusUpdate', 'Enviando...');
         }
     }
 
     function processHash() {
         var hash = window.location.hash.substring(1);
-        log('processHash: "' + hash + '"');
         if (hash.startsWith('start:')) {
             startRecording(decodeURIComponent(hash.substring(6)));
         } else if (hash === 'stop') {
             stopRecording();
         } else {
-            log('pronto - sem hash');
-            mta.triggerEvent('onAudioRecorderReady');
+            mtaSignal('onAudioRecorderReady', '');
         }
     }
 
-    function waitMtaThenProcess() {
-        if (window.mta && window.mta.triggerEvent) {
-            processHash();
-        } else {
-            setTimeout(waitMtaThenProcess, 100);
-        }
+    function waitMtaSignalReady() {
+        // mta nao existe em browser remoto, mas mtaSignal usa navegacao
+        // entao pode chamar direto
+        processHash();
     }
 
-    window.addEventListener('load', waitMtaThenProcess);
+    window.addEventListener('load', waitMtaSignalReady);
     window.addEventListener('hashchange', processHash);
 </script>
 </body>
