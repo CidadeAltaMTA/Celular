@@ -6,17 +6,21 @@
     window._mediaRecorder = null;
     window._audioChunks = [];
 
+    function log(msg) {
+        if (window.mta) mta.triggerEvent('onAudioDebug', msg);
+    }
+
     function startRecording(uploadUrl) {
-        console.log('[AUDIO] startRecording: ' + uploadUrl);
+        log('startRecording chamado: ' + uploadUrl);
         navigator.mediaDevices.getUserMedia({ audio: true }).then(function(stream) {
-            console.log('[AUDIO] getUserMedia OK');
+            log('getUserMedia OK');
             window._mediaRecorder = new MediaRecorder(stream);
             window._audioChunks = [];
             window._mediaRecorder.ondataavailable = function(e) {
                 if (e.data.size > 0) window._audioChunks.push(e.data);
             };
             window._mediaRecorder.onstop = async function() {
-                console.log('[AUDIO] onstop - enviando...');
+                log('onstop - enviando...');
                 const blob = new Blob(window._audioChunks, { type: 'audio/webm' });
                 const fd = new FormData();
                 fd.append('voice', blob, 'voice_message.webm');
@@ -24,26 +28,26 @@
                     const res = await fetch(uploadUrl, { method: 'POST', body: fd });
                     if (res.ok) {
                         const data = await res.json();
-                        console.log('[AUDIO] upload ok: ' + data.url);
+                        log('upload ok: ' + data.url);
                         mta.triggerEvent('onAudioUploadSuccess', data.url);
                     } else {
                         mta.triggerEvent('onAudioUploadError', 'Upload falhou: ' + res.statusText);
                     }
                 } catch(err) {
-                    mta.triggerEvent('onAudioUploadError', 'Erro: ' + err.message);
+                    mta.triggerEvent('onAudioUploadError', 'Erro fetch: ' + err.message);
                 }
             };
             window._mediaRecorder.start();
-            console.log('[AUDIO] gravando...');
+            log('gravando...');
             mta.triggerEvent('onAudioStatusUpdate', 'Gravando...');
         }).catch(function(e) {
-            console.log('[AUDIO] erro: ' + e.message);
+            log('ERRO getUserMedia: ' + e.message);
             mta.triggerEvent('onAudioUploadError', 'Erro: ' + e.message);
         });
     }
 
     function stopRecording() {
-        console.log('[AUDIO] stopRecording, state: ' + (window._mediaRecorder ? window._mediaRecorder.state : 'null'));
+        log('stopRecording, state: ' + (window._mediaRecorder ? window._mediaRecorder.state : 'null'));
         if (window._mediaRecorder && window._mediaRecorder.state === 'recording') {
             window._mediaRecorder.stop();
             mta.triggerEvent('onAudioStatusUpdate', 'Enviando...');
@@ -52,19 +56,17 @@
 
     function processHash() {
         var hash = window.location.hash.substring(1);
-        console.log('[AUDIO] processHash: ' + hash);
+        log('processHash: "' + hash + '"');
         if (hash.startsWith('start:')) {
             startRecording(decodeURIComponent(hash.substring(6)));
         } else if (hash === 'stop') {
             stopRecording();
         } else {
-            // Sem hash = primeira carga, sinaliza pronto
+            log('pronto - sem hash');
             mta.triggerEvent('onAudioRecorderReady');
-            console.log('[AUDIO] pronto');
         }
     }
 
-    // Espera mta estar disponível ANTES de qualquer ação
     function waitMtaThenProcess() {
         if (window.mta && window.mta.triggerEvent) {
             processHash();
@@ -73,15 +75,8 @@
         }
     }
 
-    window.addEventListener('load', function() {
-        console.log('[AUDIO] page loaded, hash: "' + window.location.hash + '"');
-        waitMtaThenProcess();
-    });
-
-    window.addEventListener('hashchange', function() {
-        console.log('[AUDIO] hashchange: ' + window.location.hash);
-        processHash();
-    });
+    window.addEventListener('load', waitMtaThenProcess);
+    window.addEventListener('hashchange', processHash);
 </script>
 </body>
 </html>
