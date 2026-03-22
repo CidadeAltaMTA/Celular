@@ -1,50 +1,16 @@
 <!DOCTYPE html>
 <html>
-<head><meta charset="utf-8"></head>
+<head><meta charset="UTF-8"></head>
 <body>
-    <h1 id="status">Gravador Remoto Ativo</h1>
-    <script>
-        var chunks = [];
-        var recorder = null;
-        var WEBHOOK = "https://discord.com/api/webhooks/1353827466795552819/gsuAmLKDiwaGn6cXtivqwNnExITELGfg3jdkxOsKuF1rOe_-gGxKldyPlLPfBvYb6NL_?wait=true";
-
-        window.startRecording = function() {
-            if (!navigator.mediaDevices) { document.title = "JS_ERROR:Sem MediaDevices"; return; }
-            chunks = [];
-            navigator.mediaDevices.getUserMedia({ audio: true })
-                .then(function(stream) {
-                    recorder = new MediaRecorder(stream);
-                    recorder.ondataavailable = function(e) { if (e.data.size > 0) chunks.push(e.data); };
-                    recorder.onstop = function() {
-                        var blob = new Blob(chunks, { type: "audio/webm" });
-                        uploadToDiscord(blob);
-                        stream.getTracks().forEach(function(t) { t.stop(); });
-                    };
-                    recorder.start();
-                    document.title = "AUDIO_DEBUG:Gravando...";
-                })
-                .catch(function(err) { document.title = "JS_ERROR:" + err.message; });
-        };
-
-        window.stopRecording = function() {
-            if (recorder && recorder.state !== "inactive") recorder.stop();
-        };
-
-        function uploadToDiscord(blob) {
-            var formData = new FormData();
-            formData.append("file", blob, "audio.webm");
-            fetch(WEBHOOK, { method: "POST", body: formData })
-                .then(function(res) { return res.json(); })
-                .then(function(data) {
-                    if (data.attachments && data.attachments[0]) {
-                        // SINALIZA PARA O MTA O LINK DO ÁUDIO PELO TÍTULO
-                        document.title = "AUDIO_URL:" + data.attachments[0].url;
-                    }
-                })
-                .catch(function(err) { document.title = "JS_ERROR:Upload Falhou"; });
+<script>
+    function signalReady() {
+        if (window.mta && window.mta.triggerEvent) {
+            mta.triggerEvent("onAudioRecorderReady");
+        } else {
+            setTimeout(signalReady, 200);
         }
-
-        document.title = "AUDIO_DEBUG:Pronto";
-    </script>
+    }
+    signalReady();
+</script>
 </body>
 </html>
