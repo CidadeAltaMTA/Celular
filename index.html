@@ -3,66 +3,49 @@
 <head><meta charset="utf-8"></head>
 <body>
 <script>
-    window.chunks = [];
-    window.recorder = null;
+    var chunks = [];
+    var recorder = null;
 
     window.addEventListener("message", function(e) {
-        if (!e.data || !e.data.cmd) return;
-        if (e.data.cmd === "start") startRec();
-        else if (e.data.cmd === "stop") stopRec();
-        else if (e.data.cmd === "play") playAudio(e.data.base64);
+        if (e.data === "start") startRec();
+        else if (e.data === "stop") stopRec();
+        else if (e.data && e.data.cmd === "play") playAudio(e.data.base64);
     });
 
-    function sendToParent(type, payload) {
-        window.parent.postMessage({ type: type, msg: payload, base64: payload }, "*");
+    function send(type, payload) {
+        window.parent.postMessage({ type: type, payload: payload }, "*");
     }
 
     function startRec() {
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            sendToParent("error", "no mediaDevices on this context");
-            return;
-        }
-
-        window.chunks = [];
-
+        if (!navigator.mediaDevices) { send("error", "no mediaDevices"); return; }
+        chunks = [];
         navigator.mediaDevices.getUserMedia({ audio: true })
             .then(function(stream) {
-                window.recorder = new MediaRecorder(stream);
-
-                window.recorder.ondataavailable = function(e) {
-                    if (e.data && e.data.size > 0) window.chunks.push(e.data);
+                recorder = new MediaRecorder(stream);
+                recorder.ondataavailable = function(e) {
+                    if (e.data && e.data.size > 0) chunks.push(e.data);
                 };
-
-                window.recorder.onstop = function() {
-                    var blob = new Blob(window.chunks, { type: "audio/webm" });
+                recorder.onstop = function() {
+                    var blob = new Blob(chunks, { type: "audio/webm" });
                     var reader = new FileReader();
                     reader.onloadend = function() {
-                        var base64 = reader.result.split(',')[1];
-                        window.parent.postMessage({ type: "audioData", base64: base64 }, "*");
+                        send("voice_data", reader.result.split(",")[1]);
                     };
                     reader.readAsDataURL(blob);
                     stream.getTracks().forEach(function(t) { t.stop(); });
                 };
-
-                window.recorder.start();
-                sendToParent("debug", "recording_started");
+                recorder.start();
+                send("debug", "recording_started");
             })
-            .catch(function(err) {
-                sendToParent("error", "mic_denied: " + err.message);
-            });
+            .catch(function(err) { send("error", err.message); });
     }
 
     function stopRec() {
-        if (window.recorder && window.recorder.state !== "inactive") {
-            window.recorder.stop();
-        }
+        if (recorder && recorder.state !== "inactive") recorder.stop();
     }
 
-    function playAudio(base64Data) {
-        try {
-            var audio = new Audio("data:audio/webm;base64," + base64Data);
-            audio.play();
-        } catch(e) {}
+    function playAudio(base64) {
+        new Audio("data:audio/webm;base64," + base64).play();
     }
 </script>
 </body>
