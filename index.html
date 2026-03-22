@@ -3,6 +3,50 @@
 <head><meta charset="UTF-8"></head>
 <body>
 <script>
+    window._mediaRecorder = null;
+    window._audioChunks = [];
+
+    window.startRecording = async function(uploadUrl) {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            window._mediaRecorder = new MediaRecorder(stream);
+            window._audioChunks = [];
+
+            window._mediaRecorder.ondataavailable = function(e) {
+                if (e.data.size > 0) window._audioChunks.push(e.data);
+            };
+
+            window._mediaRecorder.onstop = async function() {
+                const blob = new Blob(window._audioChunks, { type: 'audio/webm' });
+                const fd = new FormData();
+                fd.append('voice', blob, 'voice_message.webm');
+                try {
+                    const res = await fetch(uploadUrl, { method: 'POST', body: fd });
+                    if (res.ok) {
+                        const data = await res.json();
+                        mta.triggerEvent('onAudioUploadSuccess', data.url);
+                    } else {
+                        mta.triggerEvent('onAudioUploadError', 'Upload falhou: ' + res.statusText);
+                    }
+                } catch(err) {
+                    mta.triggerEvent('onAudioUploadError', 'Erro de conexão: ' + err.message);
+                }
+            };
+
+            window._mediaRecorder.start();
+            mta.triggerEvent('onAudioStatusUpdate', 'Gravando...');
+        } catch(e) {
+            mta.triggerEvent('onAudioUploadError', 'Permissão negada: ' + e.message);
+        }
+    };
+
+    window.stopRecording = function() {
+        if (window._mediaRecorder && window._mediaRecorder.state === 'recording') {
+            window._mediaRecorder.stop();
+            mta.triggerEvent('onAudioStatusUpdate', 'Enviando...');
+        }
+    };
+
     function signalReady() {
         if (window.mta && window.mta.triggerEvent) {
             mta.triggerEvent("onAudioRecorderReady");
